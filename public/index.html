@@ -51,26 +51,34 @@
       <div class="sections-grid">
         <div class="section-card" id="section1Card">
           <div class="section-icon">🎯</div>
-          <h3>Section I: Pitch Practice</h3>
-          <p>Hit your target note consistently</p>
+          <h3>Section I: Pitch Anchor</h3>
+          <p>Hit your target note consistently while humming</p>
           <div class="section-progress" id="section1Progress"></div>
           <button class="btn btn-primary" onclick="app.navigateTo('section1')">Start Practice</button>
         </div>
 
         <div class="section-card locked" id="section2Card">
-          <div class="section-icon">🔮</div>
-          <h3>Section II: Resonance Training</h3>
-          <p>Master throat posture and resonance</p>
+          <div class="section-icon">🗣️</div>
+          <h3>Section II: Advanced Pitch</h3>
+          <p>Maintain pitch anchor during speech</p>
           <div class="section-progress" id="section2Progress"></div>
           <button class="btn btn-secondary" onclick="app.navigateTo('section2')" disabled>Locked</button>
         </div>
 
         <div class="section-card locked" id="section3Card">
-          <div class="section-icon">📖</div>
-          <h3>Section III: Word Practice</h3>
-          <p>Apply skills to speech</p>
+          <div class="section-icon">🔮</div>
+          <h3>Section III: Resonance Training</h3>
+          <p>Master throat posture and warmth</p>
           <div class="section-progress" id="section3Progress"></div>
           <button class="btn btn-secondary" onclick="app.navigateTo('section3')" disabled>Locked</button>
+        </div>
+
+        <div class="section-card locked" id="section4Card">
+          <div class="section-icon">📖</div>
+          <h3>Section IV: Word Practice</h3>
+          <p>Apply all skills to speech</p>
+          <div class="section-progress" id="section4Progress"></div>
+          <button class="btn btn-secondary" onclick="app.navigateTo('section4')" disabled>Locked</button>
         </div>
       </div>
 
@@ -96,12 +104,14 @@
 
       <div class="exercise-container">
         <div class="instructions">
-          <p>When the light turns <span class="highlight-success">green</span>, hum at your target pitch and sustain it.</p>
+          <p><strong>Practice Mode:</strong> Hum continuously with real-time feedback. No time limits or disqualifications.</p>
+          <p><strong>Test Mode:</strong> 30-second evaluation with automatic pass/fail. Pitch must stay above 150 Hz.</p>
           <p>Target: <strong id="targetNoteDisplay">E3 (164.81 Hz)</strong></p>
         </div>
 
         <div class="visual-feedback">
           <div id="readyLight" class="ready-light"></div>
+          <div id="pitchModeIndicator" style="text-align: center; font-weight: bold; margin-bottom: 10px; display: none;"></div>
           <canvas id="pitchMeterCanvas" width="400" height="150"></canvas>
         </div>
 
@@ -125,11 +135,14 @@
         </div>
 
         <div class="controls">
-          <button id="startPitchBtn" class="btn btn-primary btn-lg" onclick="app.startPitchExercise()">
-            Start Exercise
+          <button id="startPitchPracticeBtn" class="btn btn-outline btn-lg" onclick="app.startPitchPractice()" style="margin-right: 10px;">
+            Practice Mode
           </button>
-          <button id="stopPitchBtn" class="btn btn-danger btn-lg" onclick="app.stopPitchExercise()" style="display: none;">
-            Stop
+          <button id="startPitchTestBtn" class="btn btn-primary btn-lg" onclick="app.startPitchExercise()">
+            Test Mode
+          </button>
+          <button id="stopPitchPracticeBtn" class="btn btn-danger btn-lg" onclick="app.stopPitchPractice()" style="display: none;">
+            Stop Practice
           </button>
         </div>
 
@@ -141,20 +154,94 @@
       </div>
     </div>
 
-    <!-- Section 2: Resonance Training -->
+    <!-- Section 2: Advanced Pitch Practice -->
     <div id="section2Screen" class="screen">
       <div class="screen-header">
         <button class="btn-back" onclick="app.navigateTo('home')">← Back</button>
-        <h2>Section II: Resonance Training</h2>
+        <h2>Section II: Advanced Pitch Anchor</h2>
       </div>
 
       <div class="exercise-container">
         <div class="instructions">
-          <p><strong>Exercise:</strong> Hum at your target pitch, then silently make a "K" sound and lower your tongue while maintaining the pitch.</p>
+          <p><strong>Goal:</strong> Maintain your pitch anchor (165 Hz) during full sentences, overcoming pitch drops from consonants and vowels.</p>
+          <p><strong>Practice Mode:</strong> Practice individual sentences with real-time feedback.</p>
+          <p><strong>Test Mode:</strong> Complete all sentences in sequence. Must achieve &lt;15 Hz melodic stability for each.</p>
+        </div>
+
+        <div class="tier-indicator" id="tierIndicator" style="text-align: center; margin: 20px 0;">
+          <h3>Tier 1: High Vowel Anchors</h3>
+          <p>Easiest - Practice with bright 'ee' and 'ay' sounds</p>
+        </div>
+
+        <div class="sentence-display" style="background: #1e1e2e; border-radius: 10px; padding: 20px; margin: 20px 0;">
+          <h3 style="text-align: center; color: #00d9ff; margin-bottom: 10px;">Say this sentence:</h3>
+          <div id="currentSentence" style="font-size: 24px; font-weight: bold; text-align: center; color: #fff; margin: 20px 0;">
+            "My dearest friend, say hi to me."
+          </div>
+        </div>
+
+        <div class="visual-feedback">
+          <div id="sentenceModeIndicator" style="text-align: center; font-weight: bold; margin-bottom: 10px; display: none;"></div>
+          <canvas id="sentencePitchMeterCanvas" width="400" height="150"></canvas>
+        </div>
+
+        <div class="live-stats">
+          <div class="stat-box">
+            <span class="stat-label">Current Pitch</span>
+            <span class="stat-value large" id="sentenceCurrentPitch">-- Hz</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Melodic Stability (σ)</span>
+            <span class="stat-value" id="sentenceMelodicStability">-- Hz</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Status</span>
+            <span class="stat-value" id="sentenceStatus">Ready</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Progress</span>
+            <span class="stat-value highlight-primary" id="sentenceProgress">0/6</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button id="startSentencePracticeBtn" class="btn btn-outline btn-lg" onclick="app.startSentencePractice()" style="margin-right: 10px;">
+            Practice Mode
+          </button>
+          <button id="startSentenceTestBtn" class="btn btn-primary btn-lg" onclick="app.startSentenceTest()">
+            Test Mode
+          </button>
+          <button id="stopSentencePracticeBtn" class="btn btn-danger btn-lg" onclick="app.stopSentencePractice()" style="display: none;">
+            Stop Practice
+          </button>
+          <button id="nextSentenceBtn" class="btn btn-outline btn-lg" onclick="app.nextSentence()" style="display: none;">
+            Next Sentence
+          </button>
+        </div>
+
+        <div id="sentenceResultsSection" class="results" style="display: none;">
+          <h3 id="sentenceResultTitle">Result</h3>
+          <div id="sentenceResultsContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Resonance Training -->
+    <div id="section3Screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="app.navigateTo('home')">← Back</button>
+        <h2>Section III: Resonance Training</h2>
+      </div>
+
+      <div class="exercise-container">
+        <div class="instructions">
+          <p><strong>Practice Mode:</strong> Hum continuously while engaging the "Silent K" posture. Real-time feedback, no disqualifications.</p>
+          <p><strong>Test Mode:</strong> 30-second evaluation with automatic pass/fail. Stability must stay below 15%.</p>
           <p>Focus on achieving and maintaining stable formant frequencies.</p>
         </div>
 
         <div class="visual-feedback">
+          <div id="resonanceModeIndicator" style="text-align: center; font-weight: bold; margin-bottom: 10px; display: none;"></div>
           <canvas id="resonanceMeterCanvas" width="400" height="200"></canvas>
         </div>
 
@@ -178,11 +265,14 @@
         </div>
 
         <div class="controls">
-          <button id="startResonanceBtn" class="btn btn-primary btn-lg" onclick="app.startResonanceExercise()">
-            Start Exercise
+          <button id="startResonancePracticeBtn" class="btn btn-outline btn-lg" onclick="app.startResonancePractice()" style="margin-right: 10px;">
+            Practice Mode
           </button>
-          <button id="stopResonanceBtn" class="btn btn-danger btn-lg" onclick="app.stopResonanceExercise()" style="display: none;">
-            Stop
+          <button id="startResonanceTestBtn" class="btn btn-primary btn-lg" onclick="app.startResonanceExercise()">
+            Test Mode
+          </button>
+          <button id="stopResonancePracticeBtn" class="btn btn-danger btn-lg" onclick="app.stopResonancePractice()" style="display: none;">
+            Stop Practice
           </button>
         </div>
 
@@ -194,11 +284,11 @@
       </div>
     </div>
 
-    <!-- Section 3: Word Practice -->
-    <div id="section3Screen" class="screen">
+    <!-- Section 4: Word Practice -->
+    <div id="section4Screen" class="screen">
       <div class="screen-header">
         <button class="btn-back" onclick="app.navigateTo('home')">← Back</button>
-        <h2>Section III: Word Practice</h2>
+        <h2>Section IV: Word Practice</h2>
       </div>
 
       <div class="exercise-container">

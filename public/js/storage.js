@@ -22,6 +22,7 @@ class Storage {
           section1Unlocked: true,
           section2Unlocked: false,
           section3Unlocked: false,
+          section4Unlocked: false,
           section1Stats: {
             attempts: 0,
             bestAccuracy: null,
@@ -32,13 +33,21 @@ class Storage {
           },
           section2Stats: {
             attempts: 0,
+            completedSessions: 0,
+            sentencesCompleted: [],
+            bestMelodicStability: null,
+            currentTier: 1,
+            requiredSessions: 3
+          },
+          section3Stats: {
+            attempts: 0,
             bestResonanceStability: null,
             avgResonanceStdDev: null,
             completed: false,
             consecutiveSuccesses: 0,
             requiredSuccesses: 3
           },
-          section3Stats: {
+          section4Stats: {
             vowelsCompleted: [],
             wordsCompleted: [],
             phrasesCompleted: [],
@@ -93,6 +102,8 @@ class Storage {
       data.progress.section2Stats = { ...data.progress.section2Stats, ...updates };
     } else if (section === 3) {
       data.progress.section3Stats = { ...data.progress.section3Stats, ...updates };
+    } else if (section === 4) {
+      data.progress.section4Stats = { ...data.progress.section4Stats, ...updates };
     }
     this.saveData(data);
   }
@@ -103,6 +114,8 @@ class Storage {
       data.progress.section2Unlocked = true;
     } else if (section === 3) {
       data.progress.section3Unlocked = true;
+    } else if (section === 4) {
+      data.progress.section4Unlocked = true;
     }
     this.saveData(data);
   }

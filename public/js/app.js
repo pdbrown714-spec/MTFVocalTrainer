@@ -15,6 +15,22 @@ class VoiceTrainerApp {
     this.exerciseStartTime = null;
     this.exerciseData = [];
 
+    // Section 2: Advanced Pitch Practice sentences
+    this.sentences = [
+      // Tier 1: High Vowel Anchors (Easiest)
+      { text: "My dearest friend, say hi to me.", tier: 1 },
+      { text: "We need three easy keys, please.", tier: 1 },
+      // Tier 2: Transitional Vowel Challenges (Medium)
+      { text: "Oh, I know all you told me.", tier: 2 },
+      { text: "Love you so much, dear.", tier: 2 },
+      // Tier 3: Low Consonant Resistance (Hard)
+      { text: "Little lamps light up the room.", tier: 3 },
+      { text: "No, my name is Ellie, not him.", tier: 3 }
+    ];
+    this.currentSentenceIndex = 0;
+    this.isTestMode = false;
+    this.testSentencesCompleted = [];
+
     // Word practice
     this.vowels = ['A', 'E', 'I', 'O', 'U'];
     this.words = ['hello', 'water', 'sister', 'mother', 'beautiful', 'amazing', 'wonderful', 'together', 'forever', 'sunshine'];
@@ -71,6 +87,14 @@ class VoiceTrainerApp {
       document.querySelector('#section3Card .btn').classList.add('btn-primary');
     }
 
+    if (progress.section4Unlocked) {
+      document.getElementById('section4Card').classList.remove('locked');
+      document.querySelector('#section4Card .btn').disabled = false;
+      document.querySelector('#section4Card .btn').textContent = 'Start Practice';
+      document.querySelector('#section4Card .btn').classList.remove('btn-secondary');
+      document.querySelector('#section4Card .btn').classList.add('btn-primary');
+    }
+
     // Load settings
     document.getElementById('noteSelect').value = settings.targetNote;
     document.getElementById('darkModeToggle').checked = settings.darkMode;
@@ -113,11 +137,21 @@ class VoiceTrainerApp {
 
     const section2Prog = document.getElementById('section2Progress');
     if (section2Prog && progress.section2Unlocked) {
-      const consecutive = progress.section2Stats.consecutiveSuccesses;
-      if (consecutive > 0) {
-        section2Prog.textContent = `Progress: ${consecutive}/3 consecutive successes`;
+      const completed = progress.section2Stats.completedSessions;
+      if (completed > 0) {
+        section2Prog.textContent = `Progress: ${completed}/3 successful sessions`;
       } else {
-        section2Prog.textContent = 'Get 3 consecutive passes to unlock Section III';
+        section2Prog.textContent = 'Complete 3 sessions to unlock Section III';
+      }
+    }
+
+    const section3Prog = document.getElementById('section3Progress');
+    if (section3Prog && progress.section3Unlocked) {
+      const consecutive = progress.section3Stats.consecutiveSuccesses;
+      if (consecutive > 0) {
+        section3Prog.textContent = `Progress: ${consecutive}/3 consecutive successes`;
+      } else {
+        section3Prog.textContent = 'Get 3 consecutive passes to unlock Section IV';
       }
     }
   }
@@ -142,6 +176,8 @@ class VoiceTrainerApp {
       this.renderSection2();
     } else if (screen === 'section3') {
       this.renderSection3();
+    } else if (screen === 'section4') {
+      this.renderSection4();
     }
 
     // Resume audio context if needed
@@ -155,8 +191,8 @@ class VoiceTrainerApp {
   }
 
   async startPitchExercise() {
-    document.getElementById('startPitchBtn').style.display = 'none';
-    document.getElementById('stopPitchBtn').style.display = 'inline-block';
+    document.getElementById('startPitchPracticeBtn').style.display = 'none';
+    document.getElementById('startPitchTestBtn').style.display = 'none';
     document.getElementById('pitchResultsSection').style.display = 'none';
 
     this.currentExercise = 'pitch';
@@ -173,42 +209,47 @@ class VoiceTrainerApp {
       document.getElementById('readyLight').classList.add('active');
     }, 2000);
 
-    // Turn off light after 35 seconds (enough time for practice)
-    setTimeout(() => {
-      document.getElementById('readyLight').classList.remove('active');
-    }, 37000);
-
-    // Auto-stop after 40 seconds
-    let autoStopTimer = setTimeout(() => {
-      console.log('⏱️ Auto-stopping after 40 seconds');
-      this.stopPitchExercise();
-    }, 40000);
-
     let targetHitTime = null;
     let sessionStarted = false;
     let sustainStartTime = null;
     let sustainDuration = 0;
     const requiredSustainSeconds = 3; // Must hold for 3 seconds
 
-    // Store timer so we can cancel it if manually stopped
-    this.autoStopTimer = autoStopTimer;
+    // Track actual humming time (not including silence)
+    let totalHummingTime = 0;
+    const targetHummingSeconds = 30; // Auto-stop after 30s of humming
+
+    // Failure threshold tracking
+    let pitchFailureStartTime = null;
+    const pitchFailureThreshold = 150; // Hz
+    const pitchFailureTimeLimit = 0.5; // seconds
+    let exerciseFailed = false;
 
     // Start recording and analyzing
     let callbackCount = 0;
     let lastLogTime = Date.now();
+    let lastCallbackTime = Date.now();
+
     this.audioManager.startRecording((audioData) => {
+      if (exerciseFailed) return; // Stop processing if failed
+
       callbackCount++;
+      const now = Date.now();
+      const deltaTime = (now - lastCallbackTime) / 1000; // Time since last callback in seconds
+      lastCallbackTime = now;
 
       const pitch = this.pitchDetector.detectPitch(audioData.timeDomainData);
 
       // Log pitch every 2 seconds for debugging
-      const now = Date.now();
       if (now - lastLogTime > 2000) {
-        console.log('🎵 Current pitch:', pitch ? `${pitch.toFixed(1)} Hz` : 'none', '| Callbacks:', callbackCount);
+        console.log('🎵 Current pitch:', pitch ? `${pitch.toFixed(1)} Hz` : 'none', '| Humming time:', totalHummingTime.toFixed(1), 's/', targetHummingSeconds, 's');
         lastLogTime = now;
       }
 
       if (pitch) {
+        // Count this as humming time
+        totalHummingTime += deltaTime;
+
         const avgPitch = this.pitchDetector.getAveragePitch(5);
         const stdDev = this.pitchDetector.getStandardDeviation(10);
 
@@ -216,13 +257,33 @@ class VoiceTrainerApp {
         document.getElementById('currentPitch').textContent = `${avgPitch.toFixed(1)} Hz`;
 
         const accuracy = Math.abs(avgPitch - targetFreq);
-        document.getElementById('pitchAccuracy').textContent = `${accuracy.toFixed(1)} Hz`;
         document.getElementById('pitchStability').textContent = `${stdDev.toFixed(1)} Hz`;
 
         // Draw pitch meter
         const canvas = document.getElementById('pitchMeterCanvas');
         if (canvas) {
           this.charts.drawPitchMeter(canvas, avgPitch, targetFreq);
+        }
+
+        // Check failure threshold: pitch below 150 Hz for > 0.5s
+        if (avgPitch < pitchFailureThreshold) {
+          if (!pitchFailureStartTime) {
+            pitchFailureStartTime = Date.now();
+          } else {
+            const failureDuration = (Date.now() - pitchFailureStartTime) / 1000;
+            if (failureDuration > pitchFailureTimeLimit) {
+              exerciseFailed = true;
+              console.log('❌ FAILURE: Pitch dropped below 150 Hz for too long');
+              this.audioManager.stopRecording();
+              document.getElementById('readyLight').classList.remove('active');
+              alert('⚠️ Exercise disqualified!\n\nYour pitch dropped below 150 Hz for longer than 0.5 seconds.\n\nThis suggests your voice is slipping toward your old pitch habit. Take a breath and try again!');
+              document.getElementById('startPitchPracticeBtn').style.display = 'inline-block';
+              document.getElementById('startPitchTestBtn').style.display = 'inline-block';
+              return;
+            }
+          }
+        } else {
+          pitchFailureStartTime = null; // Reset failure timer
         }
 
         // Check if currently on target
@@ -245,7 +306,6 @@ class VoiceTrainerApp {
               targetHitTime = Date.now() - this.exerciseStartTime;
               sessionStarted = true;
               console.log('✅ Sustained for 3 seconds! Starting session recording.');
-              document.getElementById('pitchAccuracy').textContent = '✓ Recording!';
             }
           }
         } else {
@@ -257,6 +317,12 @@ class VoiceTrainerApp {
           }
         }
 
+        // Update UI with progress
+        if (sessionStarted) {
+          const remainingTime = Math.max(0, targetHummingSeconds - totalHummingTime);
+          document.getElementById('pitchAccuracy').textContent = `Recording: ${remainingTime.toFixed(1)}s left`;
+        }
+
         // Record data only after sustaining for required time
         if (sessionStarted) {
           this.exerciseData.push({
@@ -265,6 +331,13 @@ class VoiceTrainerApp {
             stdDev: stdDev
           });
         }
+
+        // Auto-stop after 30 seconds of humming
+        if (totalHummingTime >= targetHummingSeconds) {
+          console.log('⏱️ Auto-stopping after 30 seconds of humming');
+          document.getElementById('readyLight').classList.remove('active');
+          this.stopPitchExercise();
+        }
       }
     });
   }
@@ -272,14 +345,8 @@ class VoiceTrainerApp {
   stopPitchExercise() {
     this.audioManager.stopRecording();
 
-    // Clear auto-stop timer if it exists
-    if (this.autoStopTimer) {
-      clearTimeout(this.autoStopTimer);
-      this.autoStopTimer = null;
-    }
-
-    document.getElementById('startPitchBtn').style.display = 'inline-block';
-    document.getElementById('stopPitchBtn').style.display = 'none';
+    document.getElementById('startPitchPracticeBtn').style.display = 'inline-block';
+    document.getElementById('startPitchTestBtn').style.display = 'inline-block';
     document.getElementById('readyLight').classList.remove('active');
 
     if (this.exerciseData.length === 0) {
@@ -417,14 +484,360 @@ class VoiceTrainerApp {
     resultsSection.style.display = 'block';
   }
 
-  // Section 2: Resonance Training
+  // Section 1: Practice Mode (no time limit, no failure)
+  async startPitchPractice() {
+    document.getElementById('startPitchPracticeBtn').style.display = 'none';
+    document.getElementById('startPitchTestBtn').style.display = 'none';
+    document.getElementById('stopPitchPracticeBtn').style.display = 'inline-block';
+    document.getElementById('pitchResultsSection').style.display = 'none';
+
+    const indicator = document.getElementById('pitchModeIndicator');
+    indicator.style.display = 'block';
+    indicator.textContent = '🎵 PRACTICE MODE - Hum freely, no limits!';
+    indicator.style.color = '#00d9ff';
+
+    this.currentExercise = 'pitch-practice';
+    this.exerciseStartTime = Date.now();
+
+    const settings = this.storage.getSettings();
+    const targetFreq = settings.targetFrequency;
+
+    this.pitchDetector.clearHistory();
+
+    // Start recording and analyzing
+    this.audioManager.startRecording((audioData) => {
+      const pitch = this.pitchDetector.detectPitch(audioData.timeDomainData);
+
+      if (pitch) {
+        const avgPitch = this.pitchDetector.getAveragePitch(5);
+        const stdDev = this.pitchDetector.getStandardDeviation(10);
+
+        // Update UI
+        document.getElementById('currentPitch').textContent = `${avgPitch.toFixed(1)} Hz`;
+        document.getElementById('pitchStability').textContent = `${stdDev.toFixed(1)} Hz`;
+
+        // Color code the status based on pitch
+        const statusEl = document.getElementById('pitchAccuracy');
+        const accuracy = Math.abs(avgPitch - targetFreq);
+
+        if (avgPitch < 150) {
+          statusEl.textContent = '❌ TOO LOW (< 150 Hz)';
+          statusEl.style.color = '#ff4757';
+        } else if (accuracy <= 5) {
+          statusEl.textContent = '✅ ON TARGET';
+          statusEl.style.color = '#2ed573';
+        } else if (accuracy <= 10) {
+          statusEl.textContent = '⚠️ CLOSE';
+          statusEl.style.color = '#ffa502';
+        } else {
+          statusEl.textContent = `Off by ${accuracy.toFixed(1)} Hz`;
+          statusEl.style.color = '#ffa502';
+        }
+
+        // Draw pitch meter with color coding
+        const canvas = document.getElementById('pitchMeterCanvas');
+        if (canvas) {
+          this.charts.drawPitchMeter(canvas, avgPitch, targetFreq);
+        }
+      } else {
+        document.getElementById('pitchAccuracy').textContent = 'No sound detected';
+        document.getElementById('pitchAccuracy').style.color = '#a4b0be';
+      }
+    });
+  }
+
+  stopPitchPractice() {
+    this.audioManager.stopRecording();
+
+    document.getElementById('startPitchPracticeBtn').style.display = 'inline-block';
+    document.getElementById('startPitchTestBtn').style.display = 'inline-block';
+    document.getElementById('stopPitchPracticeBtn').style.display = 'none';
+    document.getElementById('pitchModeIndicator').style.display = 'none';
+
+    // Reset displays
+    document.getElementById('currentPitch').textContent = '-- Hz';
+    document.getElementById('pitchAccuracy').textContent = '--';
+    document.getElementById('pitchAccuracy').style.color = '';
+    document.getElementById('pitchStability').textContent = '-- Hz';
+  }
+
+  // Section 2: Advanced Pitch Practice (Sentences)
   renderSection2() {
+    this.currentSentenceIndex = 0;
+    this.updateSentenceDisplay();
+    this.updateTierIndicator();
+    const progress = this.storage.getProgress();
+    document.getElementById('sentenceProgress').textContent = `${progress.section2Stats.sentencesCompleted.length}/6`;
+  }
+
+  updateTierIndicator() {
+    const sentence = this.sentences[this.currentSentenceIndex];
+    const indicator = document.getElementById('tierIndicator');
+
+    if (sentence.tier === 1) {
+      indicator.innerHTML = `<h3>Tier 1: High Vowel Anchors</h3><p>Easiest - Practice with bright 'ee' and 'ay' sounds</p>`;
+    } else if (sentence.tier === 2) {
+      indicator.innerHTML = `<h3>Tier 2: Transitional Vowel Challenges</h3><p>Medium - Maintain pitch through 'oh' and 'ah' sounds</p>`;
+    } else if (sentence.tier === 3) {
+      indicator.innerHTML = `<h3>Tier 3: Low Consonant Resistance</h3><p>Hard - Overcome difficult consonants ('L', 'M', 'N')</p>`;
+    }
+  }
+
+  updateSentenceDisplay() {
+    const sentence = this.sentences[this.currentSentenceIndex];
+    document.getElementById('currentSentence').textContent = `"${sentence.text}"`;
+    this.updateTierIndicator();
+  }
+
+  nextSentence() {
+    // First, evaluate the current sentence
+    if (this.isTestMode) {
+      this.evaluateSentence();
+    } else {
+      // In practice mode, just move to next sentence
+      this.currentSentenceIndex++;
+      if (this.currentSentenceIndex >= this.sentences.length) {
+        this.currentSentenceIndex = 0;
+      }
+      this.updateSentenceDisplay();
+      document.getElementById('sentenceResultsSection').style.display = 'none';
+    }
+  }
+
+  async startSentencePractice() {
+    document.getElementById('startSentencePracticeBtn').style.display = 'none';
+    document.getElementById('startSentenceTestBtn').style.display = 'none';
+    document.getElementById('stopSentencePracticeBtn').style.display = 'inline-block';
+    document.getElementById('sentenceResultsSection').style.display = 'none';
+
+    const indicator = document.getElementById('sentenceModeIndicator');
+    indicator.style.display = 'block';
+    indicator.textContent = '🗣️ PRACTICE MODE - Speak freely, get feedback!';
+    indicator.style.color = '#00d9ff';
+
+    this.currentExercise = 'sentence-practice';
+    this.exerciseStartTime = Date.now();
+
+    const targetFreq = 165; // Hz - the pitch anchor
+
+    this.pitchDetector.clearHistory();
+
+    // Start recording and analyzing
+    this.audioManager.startRecording((audioData) => {
+      const pitch = this.pitchDetector.detectPitch(audioData.timeDomainData);
+
+      if (pitch) {
+        const avgPitch = this.pitchDetector.getAveragePitch(5);
+        const stdDev = this.pitchDetector.getStandardDeviation(10);
+
+        // Update UI
+        document.getElementById('sentenceCurrentPitch').textContent = `${avgPitch.toFixed(1)} Hz`;
+        document.getElementById('sentenceMelodicStability').textContent = `${stdDev.toFixed(1)} Hz`;
+
+        // Color code the status based on pitch and stability
+        const statusEl = document.getElementById('sentenceStatus');
+
+        if (avgPitch < 150) {
+          statusEl.textContent = '❌ TOO LOW (< 150 Hz)';
+          statusEl.style.color = '#ff4757';
+        } else if (stdDev > 15) {
+          statusEl.textContent = '⚠️ TOO MUCH VARIATION';
+          statusEl.style.color = '#ffa502';
+        } else if (stdDev < 15 && Math.abs(avgPitch - targetFreq) <= 10) {
+          statusEl.textContent = '✅ EXCELLENT!';
+          statusEl.style.color = '#2ed573';
+        } else {
+          statusEl.textContent = 'GOOD - Keep going!';
+          statusEl.style.color = '#00d9ff';
+        }
+
+        // Draw pitch meter
+        const canvas = document.getElementById('sentencePitchMeterCanvas');
+        if (canvas) {
+          this.charts.drawPitchMeter(canvas, avgPitch, targetFreq);
+        }
+      } else {
+        document.getElementById('sentenceStatus').textContent = 'No sound detected';
+        document.getElementById('sentenceStatus').style.color = '#a4b0be';
+      }
+    });
+  }
+
+  stopSentencePractice() {
+    this.audioManager.stopRecording();
+
+    document.getElementById('startSentencePracticeBtn').style.display = 'inline-block';
+    document.getElementById('startSentenceTestBtn').style.display = 'inline-block';
+    document.getElementById('stopSentencePracticeBtn').style.display = 'none';
+    document.getElementById('sentenceModeIndicator').style.display = 'none';
+
+    // Reset displays
+    document.getElementById('sentenceCurrentPitch').textContent = '-- Hz';
+    document.getElementById('sentenceStatus').textContent = 'Ready';
+    document.getElementById('sentenceStatus').style.color = '';
+    document.getElementById('sentenceMelodicStability').textContent = '-- Hz';
+  }
+
+  async startSentenceTest() {
+    // This will cycle through all 6 sentences
+    this.isTestMode = true;
+    this.testSentencesCompleted = [];
+    this.currentSentenceIndex = 0;
+    this.updateSentenceDisplay();
+
+    document.getElementById('startSentencePracticeBtn').style.display = 'none';
+    document.getElementById('startSentenceTestBtn').style.display = 'none';
+    document.getElementById('nextSentenceBtn').style.display = 'inline-block';
+
+    const indicator = document.getElementById('sentenceModeIndicator');
+    indicator.style.display = 'block';
+    indicator.textContent = '🎯 TEST MODE - Read when ready, then click Next';
+    indicator.style.color = '#ffa502';
+
+    // Start recording for this sentence
+    this.startSentenceRecording();
+  }
+
+  startSentenceRecording() {
+    this.exerciseStartTime = Date.now();
+    this.exerciseData = [];
+    this.pitchDetector.clearHistory();
+
+    const targetFreq = 165;
+
+    this.audioManager.startRecording((audioData) => {
+      const pitch = this.pitchDetector.detectPitch(audioData.timeDomainData);
+
+      if (pitch) {
+        const avgPitch = this.pitchDetector.getAveragePitch(5);
+        const stdDev = this.pitchDetector.getStandardDeviation(10);
+
+        // Update UI
+        document.getElementById('sentenceCurrentPitch').textContent = `${avgPitch.toFixed(1)} Hz`;
+        document.getElementById('sentenceMelodicStability').textContent = `${stdDev.toFixed(1)} Hz`;
+
+        // Record data
+        this.exerciseData.push({
+          timestamp: Date.now() - this.exerciseStartTime,
+          pitch: avgPitch,
+          stdDev: stdDev
+        });
+
+        // Draw pitch meter
+        const canvas = document.getElementById('sentencePitchMeterCanvas');
+        if (canvas) {
+          this.charts.drawPitchMeter(canvas, avgPitch, targetFreq);
+        }
+      }
+    });
+  }
+
+  async evaluateSentence() {
+    this.audioManager.stopRecording();
+
+    if (this.exerciseData.length === 0) {
+      alert('No speech detected. Please try again and make sure to speak the sentence.');
+      this.startSentenceRecording();
+      return;
+    }
+
+    // Calculate melodic stability (std dev across the entire sentence)
+    const pitches = this.exerciseData.map(d => d.pitch);
+    const avgPitch = pitches.reduce((a, b) => a + b, 0) / pitches.length;
+    const variance = pitches.reduce((sum, pitch) => sum + Math.pow(pitch - avgPitch, 2), 0) / pitches.length;
+    const melodicStability = Math.sqrt(variance);
+
+    const sentence = this.sentences[this.currentSentenceIndex];
+    const passed = melodicStability < 15 && avgPitch >= 150;
+
+    // Show result
+    const resultsSection = document.getElementById('sentenceResultsSection');
+    const resultsContent = document.getElementById('sentenceResultsContent');
+    const resultTitle = document.getElementById('sentenceResultTitle');
+
+    resultTitle.textContent = passed ? '✅ Passed!' : '❌ Try Again';
+    resultTitle.style.color = passed ? 'var(--color-success)' : 'var(--color-danger)';
+
+    resultsContent.innerHTML = `
+      <div class="live-stats">
+        <div class="stat-box">
+          <span class="stat-label">Average Pitch</span>
+          <span class="stat-value">${avgPitch.toFixed(1)} Hz</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Melodic Stability (σ)</span>
+          <span class="stat-value">${melodicStability.toFixed(1)} Hz</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Target</span>
+          <span class="stat-value">&lt; 15 Hz</span>
+        </div>
+      </div>
+      <p style="margin-top: 1rem; text-align: center;">
+        ${passed ? 'Great job! Your pitch remained stable.' : 'Keep practicing! Try to reduce pitch variation to below 15 Hz.'}
+      </p>
+    `;
+
+    resultsSection.style.display = 'block';
+
+    if (passed) {
+      this.testSentencesCompleted.push(this.currentSentenceIndex);
+    }
+
+    // Update progress display
+    document.getElementById('sentenceProgress').textContent = `${this.testSentencesCompleted.length}/6`;
+
+    // Move to next sentence
+    this.currentSentenceIndex++;
+
+    // Check if all sentences are complete
+    if (this.currentSentenceIndex >= this.sentences.length) {
+      // Check if we passed all sentences
+      if (this.testSentencesCompleted.length === 6) {
+        // Session complete!
+        const progress = this.storage.getProgress();
+        const newSessions = progress.section2Stats.completedSessions + 1;
+
+        this.storage.updateProgress(2, {
+          completedSessions: newSessions,
+          attempts: progress.section2Stats.attempts + 1
+        });
+
+        if (newSessions >= 3 && !progress.section3Unlocked) {
+          this.storage.unlockSection(3);
+          alert('🎉 Congratulations! You\'ve completed 3 successful sessions!\n\nSection III: Resonance Training is now unlocked!');
+          this.loadProgress();
+        } else if (newSessions < 3) {
+          alert(`🎯 Session Complete!\n\nYou passed all 6 sentences!\n\nCompleted sessions: ${newSessions}/3\n\nComplete ${3 - newSessions} more sessions to unlock Section III!`);
+        }
+      } else {
+        alert(`Test incomplete. You only passed ${this.testSentencesCompleted.length} out of 6 sentences. Try again!`);
+      }
+
+      // Reset test mode
+      this.isTestMode = false;
+      this.currentSentenceIndex = 0;
+      this.updateSentenceDisplay();
+      document.getElementById('nextSentenceBtn').style.display = 'none';
+      document.getElementById('startSentencePracticeBtn').style.display = 'inline-block';
+      document.getElementById('startSentenceTestBtn').style.display = 'inline-block';
+      document.getElementById('sentenceModeIndicator').style.display = 'none';
+      document.getElementById('sentenceResultsSection').style.display = 'none';
+    } else {
+      // Continue to next sentence
+      this.updateSentenceDisplay();
+      this.startSentenceRecording();
+    }
+  }
+
+  // Section 3: Resonance Training
+  renderSection3() {
     // Nothing special to render
   }
 
   async startResonanceExercise() {
-    document.getElementById('startResonanceBtn').style.display = 'none';
-    document.getElementById('stopResonanceBtn').style.display = 'inline-block';
+    document.getElementById('startResonancePracticeBtn').style.display = 'none';
+    document.getElementById('startResonanceTestBtn').style.display = 'none';
     document.getElementById('resonanceResultsSection').style.display = 'none';
 
     this.currentExercise = 'resonance';
@@ -434,12 +847,32 @@ class VoiceTrainerApp {
     this.formantAnalyzer.clearHistory();
     this.pitchDetector.clearHistory();
 
+    // Track actual humming time (not including silence)
+    let totalHummingTime = 0;
+    const targetHummingSeconds = 30; // Auto-stop after 30s of humming
+    let lastCallbackTime = Date.now();
+
+    // Failure threshold tracking
+    let stabilityFailureStartTime = null;
+    const stabilityFailureThreshold = 15; // % (std dev)
+    const stabilityFailureTimeLimit = 1; // seconds
+    let exerciseFailed = false;
+
     // Start recording and analyzing
     this.audioManager.startRecording((audioData) => {
+      if (exerciseFailed) return; // Stop processing if failed
+
+      const now = Date.now();
+      const deltaTime = (now - lastCallbackTime) / 1000; // Time since last callback in seconds
+      lastCallbackTime = now;
+
       const formants = this.formantAnalyzer.analyzeFormants(audioData.timeDomainData);
       const pitch = this.pitchDetector.detectPitch(audioData.timeDomainData);
 
-      if (formants) {
+      if (formants && pitch) {
+        // Count this as humming time
+        totalHummingTime += deltaTime;
+
         const avgFormants = this.formantAnalyzer.getAverageFormants(5);
         const stability = this.formantAnalyzer.getResonanceStability(10);
         const brightness = this.formantAnalyzer.getBrightnessRatio();
@@ -448,7 +881,27 @@ class VoiceTrainerApp {
         document.getElementById('f1Display').textContent = `${avgFormants.F1.toFixed(0)} Hz`;
         document.getElementById('f2Display').textContent = `${avgFormants.F2.toFixed(0)} Hz`;
         document.getElementById('brightnessDisplay').textContent = brightness ? brightness.toFixed(2) : '--';
-        document.getElementById('resonanceStability').textContent = `${stability.toFixed(1)}%`;
+        document.getElementById('resonanceStability').textContent = `${stability.toFixed(1)}% | ${(targetHummingSeconds - totalHummingTime).toFixed(1)}s left`;
+
+        // Check failure threshold: stability > 15% for > 1s
+        if (stability > stabilityFailureThreshold) {
+          if (!stabilityFailureStartTime) {
+            stabilityFailureStartTime = Date.now();
+          } else {
+            const failureDuration = (Date.now() - stabilityFailureStartTime) / 1000;
+            if (failureDuration > stabilityFailureTimeLimit) {
+              exerciseFailed = true;
+              console.log('❌ FAILURE: Stability spiked above 15% for too long');
+              this.audioManager.stopRecording();
+              alert('⚠️ Exercise disqualified!\n\nYour resonance stability spiked above 15% for longer than 1 second.\n\nThis indicates the "Silent K" throat posture collapsed. Re-engage the warmth and try again!');
+              document.getElementById('startResonancePracticeBtn').style.display = 'inline-block';
+              document.getElementById('startResonanceTestBtn').style.display = 'inline-block';
+              return;
+            }
+          }
+        } else {
+          stabilityFailureStartTime = null; // Reset failure timer
+        }
 
         // Record data
         this.exerciseData.push({
@@ -458,6 +911,12 @@ class VoiceTrainerApp {
           brightness: brightness,
           pitch: pitch
         });
+
+        // Auto-stop after 30 seconds of humming
+        if (totalHummingTime >= targetHummingSeconds) {
+          console.log('⏱️ Auto-stopping after 30 seconds of humming');
+          this.stopResonanceExercise();
+        }
       }
     });
   }
@@ -465,8 +924,8 @@ class VoiceTrainerApp {
   stopResonanceExercise() {
     this.audioManager.stopRecording();
 
-    document.getElementById('startResonanceBtn').style.display = 'inline-block';
-    document.getElementById('stopResonanceBtn').style.display = 'none';
+    document.getElementById('startResonancePracticeBtn').style.display = 'inline-block';
+    document.getElementById('startResonanceTestBtn').style.display = 'inline-block';
 
     if (this.exerciseData.length === 0) {
       alert('No data recorded. Please try again.');
@@ -482,9 +941,9 @@ class VoiceTrainerApp {
     const score = this.gamification.calculateResonanceScore(avgStability);
 
     // Save progress
-    this.storage.updateProgress(2, {
-      attempts: this.storage.getProgress().section2Stats.attempts + 1,
-      bestResonanceStability: Math.min(this.storage.getProgress().section2Stats.bestResonanceStability || 999, avgStability),
+    this.storage.updateProgress(3, {
+      attempts: this.storage.getProgress().section3Stats.attempts + 1,
+      bestResonanceStability: Math.min(this.storage.getProgress().section3Stats.bestResonanceStability || 999, avgStability),
       avgResonanceStdDev: avgStability
     });
 
@@ -494,41 +953,41 @@ class VoiceTrainerApp {
     });
 
     // Award XP
-    const xpResult = this.gamification.awardXP(2, score);
+    const xpResult = this.gamification.awardXP(3, score);
 
     // Check achievements
     const achievements = [];
 
-    if (avgStability < 10 && !this.storage.getProgress().section2Stats.completed) {
+    if (avgStability < 10 && !this.storage.getProgress().section3Stats.completed) {
       const ach = this.gamification.checkAchievement('resonanceMaster');
       if (ach) achievements.push(ach);
-      this.storage.updateProgress(2, { completed: true });
+      this.storage.updateProgress(3, { completed: true });
     }
 
-    // Track consecutive successes for unlocking Section 3
+    // Track consecutive successes for unlocking Section 4
     const progress = this.storage.getProgress();
     const passedThreshold = avgStability < 10;
 
     if (passedThreshold) {
       // Success! Increment consecutive counter
-      const newConsecutive = progress.section2Stats.consecutiveSuccesses + 1;
-      this.storage.updateProgress(2, { consecutiveSuccesses: newConsecutive });
+      const newConsecutive = progress.section3Stats.consecutiveSuccesses + 1;
+      this.storage.updateProgress(3, { consecutiveSuccesses: newConsecutive });
 
       console.log(`✅ Passed! Consecutive successes: ${newConsecutive}/3`);
 
       // Check if we've hit the required number
-      if (newConsecutive >= 3 && !progress.section3Unlocked) {
-        this.storage.unlockSection(3);
-        alert('🎉 Congratulations! You\'ve passed 3 times in a row!\n\nSection III: Word Practice is now unlocked!');
+      if (newConsecutive >= 3 && !progress.section4Unlocked) {
+        this.storage.unlockSection(4);
+        alert('🎉 Congratulations! You\'ve passed 3 times in a row!\n\nSection IV: Word Practice is now unlocked!');
         this.loadProgress();
       } else if (newConsecutive < 3) {
-        alert(`Excellent! 🔮\n\nConsecutive successes: ${newConsecutive}/3\n\nKeep going - ${3 - newConsecutive} more to unlock Section III!`);
+        alert(`Excellent! 🔮\n\nConsecutive successes: ${newConsecutive}/3\n\nKeep going - ${3 - newConsecutive} more to unlock Section IV!`);
       }
     } else {
       // Failed - reset counter
-      if (progress.section2Stats.consecutiveSuccesses > 0) {
+      if (progress.section3Stats.consecutiveSuccesses > 0) {
         console.log(`❌ Didn't pass (${avgStability.toFixed(1)}% stability). Resetting consecutive counter.`);
-        this.storage.updateProgress(2, { consecutiveSuccesses: 0 });
+        this.storage.updateProgress(3, { consecutiveSuccesses: 0 });
         alert(`Keep practicing! 💪\n\nYour resonance stability was ${avgStability.toFixed(1)}% (need <10%).\n\nConsecutive successes reset to 0/3.`);
       }
     }
@@ -570,8 +1029,77 @@ class VoiceTrainerApp {
     resultsSection.style.display = 'block';
   }
 
-  // Section 3: Word Practice
-  renderSection3() {
+  // Section 2: Practice Mode (no time limit, no failure)
+  async startResonancePractice() {
+    document.getElementById('startResonancePracticeBtn').style.display = 'none';
+    document.getElementById('startResonanceTestBtn').style.display = 'none';
+    document.getElementById('stopResonancePracticeBtn').style.display = 'inline-block';
+    document.getElementById('resonanceResultsSection').style.display = 'none';
+
+    const indicator = document.getElementById('resonanceModeIndicator');
+    indicator.style.display = 'block';
+    indicator.textContent = '🔮 PRACTICE MODE - Engage the Silent K posture!';
+    indicator.style.color = '#00d9ff';
+
+    this.currentExercise = 'resonance-practice';
+    this.exerciseStartTime = Date.now();
+
+    this.formantAnalyzer.clearHistory();
+    this.pitchDetector.clearHistory();
+
+    // Start recording and analyzing
+    this.audioManager.startRecording((audioData) => {
+      const formants = this.formantAnalyzer.analyzeFormants(audioData.timeDomainData);
+      const pitch = this.pitchDetector.detectPitch(audioData.timeDomainData);
+
+      if (formants && pitch) {
+        const avgFormants = this.formantAnalyzer.getAverageFormants(5);
+        const stability = this.formantAnalyzer.getResonanceStability(10);
+        const brightness = this.formantAnalyzer.getBrightnessRatio();
+
+        // Update UI
+        document.getElementById('f1Display').textContent = `${avgFormants.F1.toFixed(0)} Hz`;
+        document.getElementById('f2Display').textContent = `${avgFormants.F2.toFixed(0)} Hz`;
+        document.getElementById('brightnessDisplay').textContent = brightness ? brightness.toFixed(2) : '--';
+
+        // Color code the stability based on thresholds
+        const stabilityEl = document.getElementById('resonanceStability');
+
+        if (stability > 15) {
+          stabilityEl.textContent = `${stability.toFixed(1)}% ❌ TOO HIGH`;
+          stabilityEl.style.color = '#ff4757';
+        } else if (stability < 10) {
+          stabilityEl.textContent = `${stability.toFixed(1)}% ✅ EXCELLENT`;
+          stabilityEl.style.color = '#2ed573';
+        } else {
+          stabilityEl.textContent = `${stability.toFixed(1)}% ⚠️ CLOSE`;
+          stabilityEl.style.color = '#ffa502';
+        }
+      } else {
+        document.getElementById('resonanceStability').textContent = 'No sound detected';
+        document.getElementById('resonanceStability').style.color = '#a4b0be';
+      }
+    });
+  }
+
+  stopResonancePractice() {
+    this.audioManager.stopRecording();
+
+    document.getElementById('startResonancePracticeBtn').style.display = 'inline-block';
+    document.getElementById('startResonanceTestBtn').style.display = 'inline-block';
+    document.getElementById('stopResonancePracticeBtn').style.display = 'none';
+    document.getElementById('resonanceModeIndicator').style.display = 'none';
+
+    // Reset displays
+    document.getElementById('f1Display').textContent = '-- Hz';
+    document.getElementById('f2Display').textContent = '-- Hz';
+    document.getElementById('brightnessDisplay').textContent = '--';
+    document.getElementById('resonanceStability').textContent = '-- %';
+    document.getElementById('resonanceStability').style.color = '';
+  }
+
+  // Section 4: Word Practice
+  renderSection4() {
     this.selectWordLevel('vowels');
   }
 
@@ -590,7 +1118,7 @@ class VoiceTrainerApp {
     }
 
     // Load completed words for this level
-    const progress = this.storage.getProgress().section3Stats;
+    const progress = this.storage.getProgress().section4Stats;
     if (level === 'vowels') {
       this.completedWords = progress.vowelsCompleted || [];
     } else if (level === 'words') {
@@ -705,7 +1233,7 @@ class VoiceTrainerApp {
       this.completedWords.push(currentWord);
 
       // Save progress
-      const progress = this.storage.getProgress().section3Stats;
+      const progress = this.storage.getProgress().section4Stats;
       const level = document.querySelector('.level-btn.active').dataset.level;
 
       if (level === 'vowels') {
@@ -731,12 +1259,12 @@ class VoiceTrainerApp {
         }
       }
 
-      this.storage.updateProgress(3, progress);
+      this.storage.updateProgress(4, progress);
       this.renderCompletedWords();
     }
 
     // Award XP
-    const xpResult = this.gamification.awardXP(3, score);
+    const xpResult = this.gamification.awardXP(4, score);
 
     // Update nav
     this.updateNavStats();
@@ -852,7 +1380,8 @@ class VoiceTrainerApp {
     const stats = [
       { label: 'Total Sessions', value: history.sessions.length },
       { label: 'Section I Attempts', value: progress.section1Stats.attempts },
-      { label: 'Section II Attempts', value: progress.section2Stats.attempts },
+      { label: 'Section II Sessions', value: progress.section2Stats.completedSessions },
+      { label: 'Section III Attempts', value: progress.section3Stats.attempts },
       { label: 'Achievements Unlocked', value: gamification.achievements.length },
       { label: 'Total XP', value: gamification.totalXp },
       { label: 'Longest Streak', value: `${gamification.longestStreak} days` }
