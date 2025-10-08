@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Voice feminization training app with pitch and resonance exercises">
+  <meta name="theme-color" content="#e94560">
+  <title>Voice Trainer</title>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/css/styles.css">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/icons/icon-192x192.png">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-content">
+      <h1 class="nav-title">Voice Trainer</h1>
+      <div class="nav-stats">
+        <div class="stat-item">
+          <span class="stat-label">Level</span>
+          <span class="stat-value" id="navLevel">1</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Streak</span>
+          <span class="stat-value" id="navStreak">0🔥</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Home Screen -->
+    <div id="homeScreen" class="screen active">
+      <div class="welcome">
+        <h2>Welcome back, Ellie!</h2>
+        <p class="subtitle">Let's continue your voice training journey</p>
+      </div>
+
+      <div class="progress-overview">
+        <canvas id="xpProgressCanvas" width="400" height="80"></canvas>
+        <canvas id="streakCalendarCanvas" width="400" height="200"></canvas>
+      </div>
+
+      <div class="sections-grid">
+        <div class="section-card" id="section1Card">
+          <div class="section-icon">🎯</div>
+          <h3>Section I: Pitch Practice</h3>
+          <p>Hit your target note consistently</p>
+          <div class="section-progress" id="section1Progress"></div>
+          <button class="btn btn-primary" onclick="app.navigateTo('section1')">Start Practice</button>
+        </div>
+
+        <div class="section-card locked" id="section2Card">
+          <div class="section-icon">🔮</div>
+          <h3>Section II: Resonance Training</h3>
+          <p>Master throat posture and resonance</p>
+          <div class="section-progress" id="section2Progress"></div>
+          <button class="btn btn-secondary" onclick="app.navigateTo('section2')" disabled>Locked</button>
+        </div>
+
+        <div class="section-card locked" id="section3Card">
+          <div class="section-icon">📖</div>
+          <h3>Section III: Word Practice</h3>
+          <p>Apply skills to speech</p>
+          <div class="section-progress" id="section3Progress"></div>
+          <button class="btn btn-secondary" onclick="app.navigateTo('section3')" disabled>Locked</button>
+        </div>
+      </div>
+
+      <div class="quick-actions">
+        <button class="btn btn-outline" onclick="app.navigateTo('achievements')">
+          🏆 Achievements
+        </button>
+        <button class="btn btn-outline" onclick="app.navigateTo('progress')">
+          📊 Progress
+        </button>
+        <button class="btn btn-outline" onclick="app.navigateTo('settings')">
+          ⚙️ Settings
+        </button>
+      </div>
+    </div>
+
+    <!-- Section 1: Pitch Practice -->
+    <div id="section1Screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="app.navigateTo('home')">← Back</button>
+        <h2>Section I: Pitch Practice</h2>
+      </div>
+
+      <div class="exercise-container">
+        <div class="instructions">
+          <p>When the light turns <span class="highlight-success">green</span>, hum at your target pitch and sustain it.</p>
+          <p>Target: <strong id="targetNoteDisplay">E3 (164.81 Hz)</strong></p>
+        </div>
+
+        <div class="visual-feedback">
+          <div id="readyLight" class="ready-light"></div>
+          <canvas id="pitchMeterCanvas" width="400" height="150"></canvas>
+        </div>
+
+        <div class="live-stats">
+          <div class="stat-box">
+            <span class="stat-label">Current Pitch</span>
+            <span class="stat-value large" id="currentPitch">-- Hz</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Accuracy</span>
+            <span class="stat-value" id="pitchAccuracy">--</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Stability (σ)</span>
+            <span class="stat-value" id="pitchStability">-- Hz</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Score</span>
+            <span class="stat-value highlight-primary" id="pitchScore">0</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button id="startPitchBtn" class="btn btn-primary btn-lg" onclick="app.startPitchExercise()">
+            Start Exercise
+          </button>
+          <button id="stopPitchBtn" class="btn btn-danger btn-lg" onclick="app.stopPitchExercise()" style="display: none;">
+            Stop
+          </button>
+        </div>
+
+        <div id="pitchResultsSection" class="results" style="display: none;">
+          <h3>Session Results</h3>
+          <div id="pitchResultsContent"></div>
+          <button class="btn btn-primary" onclick="app.startPitchExercise()">Try Again</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Resonance Training -->
+    <div id="section2Screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="app.navigateTo('home')">← Back</button>
+        <h2>Section II: Resonance Training</h2>
+      </div>
+
+      <div class="exercise-container">
+        <div class="instructions">
+          <p><strong>Exercise:</strong> Hum at your target pitch, then silently make a "K" sound and lower your tongue while maintaining the pitch.</p>
+          <p>Focus on achieving and maintaining stable formant frequencies.</p>
+        </div>
+
+        <div class="visual-feedback">
+          <canvas id="resonanceMeterCanvas" width="400" height="200"></canvas>
+        </div>
+
+        <div class="live-stats">
+          <div class="stat-box">
+            <span class="stat-label">F1 (First Formant)</span>
+            <span class="stat-value" id="f1Display">-- Hz</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">F2 (Second Formant)</span>
+            <span class="stat-value" id="f2Display">-- Hz</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Brightness Ratio</span>
+            <span class="stat-value" id="brightnessDisplay">--</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Stability</span>
+            <span class="stat-value highlight-success" id="resonanceStability">-- %</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button id="startResonanceBtn" class="btn btn-primary btn-lg" onclick="app.startResonanceExercise()">
+            Start Exercise
+          </button>
+          <button id="stopResonanceBtn" class="btn btn-danger btn-lg" onclick="app.stopResonanceExercise()" style="display: none;">
+            Stop
+          </button>
+        </div>
+
+        <div id="resonanceResultsSection" class="results" style="display: none;">
+          <h3>Session Results</h3>
+          <div id="resonanceResultsContent"></div>
+          <button class="btn btn-primary" onclick="app.startResonanceExercise()">Try Again</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Word Practice -->
+    <div id="section3Screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="app.navigateTo('home')">← Back</button>
+        <h2>Section III: Word Practice</h2>
+      </div>
+
+      <div class="exercise-container">
+        <div class="level-selector">
+          <button class="level-btn active" data-level="vowels" onclick="app.selectWordLevel('vowels')">Vowels</button>
+          <button class="level-btn" data-level="words" onclick="app.selectWordLevel('words')">Words</button>
+          <button class="level-btn" data-level="phrases" onclick="app.selectWordLevel('phrases')">Phrases</button>
+        </div>
+
+        <div class="word-display">
+          <h3>Say: <span id="currentWord" class="word-text">--</span></h3>
+        </div>
+
+        <div class="visual-feedback">
+          <canvas id="wordMeterCanvas" width="400" height="150"></canvas>
+        </div>
+
+        <div class="live-stats">
+          <div class="stat-box">
+            <span class="stat-label">Pitch Stability</span>
+            <span class="stat-value" id="wordPitchStability">-- Hz</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Resonance Stability</span>
+            <span class="stat-value" id="wordResonanceStability">-- %</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Score</span>
+            <span class="stat-value highlight-primary" id="wordScore">0</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button id="startWordBtn" class="btn btn-primary btn-lg" onclick="app.startWordExercise()">
+            Start Recording
+          </button>
+          <button id="stopWordBtn" class="btn btn-danger btn-lg" onclick="app.stopWordExercise()" style="display: none;">
+            Stop
+          </button>
+        </div>
+
+        <div id="wordResultsSection" class="results" style="display: none;">
+          <h3 id="wordResultTitle">Result</h3>
+          <div id="wordResultsContent"></div>
+          <button class="btn btn-primary" onclick="app.nextWord()">Next Word</button>
+        </div>
+
+        <div class="word-progress">
+          <h4>Completed:</h4>
+          <div id="completedWords" class="word-chips"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Achievements Screen -->
+    <div id="achievementsScreen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="app.navigateTo('home')">← Back</button>
+        <h2>Achievements</h2>
+      </div>
+
+      <div class="achievements-container" id="achievementsList"></div>
+    </div>
+
+    <!-- Progress Screen -->
+    <div id="progressScreen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="app.navigateTo('home')">← Back</button>
+        <h2>Progress</h2>
+      </div>
+
+      <div class="progress-container">
+        <h3>Pitch History</h3>
+        <canvas id="pitchHistoryCanvas" width="400" height="200"></canvas>
+
+        <h3>Resonance History</h3>
+        <canvas id="resonanceHistoryCanvas" width="400" height="200"></canvas>
+
+        <h3>Statistics</h3>
+        <div class="stats-grid" id="statsGrid"></div>
+      </div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settingsScreen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="app.navigateTo('home')">← Back</button>
+        <h2>Settings</h2>
+      </div>
+
+      <div class="settings-container">
+        <div class="setting-group">
+          <h3>Target Note</h3>
+          <div class="setting-item">
+            <label for="noteSelect">Note:</label>
+            <select id="noteSelect" onchange="app.updateTargetNote()">
+              <option value="C3">C3 (130.81 Hz)</option>
+              <option value="C#3">C#3 (138.59 Hz)</option>
+              <option value="D3">D3 (146.83 Hz)</option>
+              <option value="D#3">D#3 (155.56 Hz)</option>
+              <option value="E3" selected>E3 (164.81 Hz)</option>
+              <option value="F3">F3 (174.61 Hz)</option>
+              <option value="F#3">F#3 (185.00 Hz)</option>
+              <option value="G3">G3 (196.00 Hz)</option>
+              <option value="G#3">G#3 (207.65 Hz)</option>
+              <option value="A3">A3 (220.00 Hz)</option>
+              <option value="A#3">A#3 (233.08 Hz)</option>
+              <option value="B3">B3 (246.94 Hz)</option>
+              <option value="C4">C4 (261.63 Hz)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <h3>Appearance</h3>
+          <div class="setting-item">
+            <label for="darkModeToggle">Dark Mode:</label>
+            <input type="checkbox" id="darkModeToggle" checked onchange="app.toggleDarkMode()">
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <h3>Notifications</h3>
+          <div class="setting-item">
+            <label for="notificationsToggle">Daily Reminders:</label>
+            <input type="checkbox" id="notificationsToggle" checked onchange="app.toggleNotifications()">
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <h3>Data</h3>
+          <button class="btn btn-outline" onclick="app.exportData()">Export Data</button>
+          <button class="btn btn-outline" onclick="app.importData()">Import Data</button>
+          <button class="btn btn-danger" onclick="app.resetProgress()">Reset Progress</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Achievement Notification -->
+  <div id="achievementNotification" class="achievement-notification">
+    <div class="achievement-content">
+      <div class="achievement-icon" id="achievementIcon"></div>
+      <div class="achievement-text">
+        <h4 id="achievementTitle"></h4>
+        <p id="achievementDescription"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/storage.js"></script>
+  <script src="/js/gamification.js"></script>
+  <script src="/js/audio.js"></script>
+  <script src="/js/pitch-detector.js"></script>
+  <script src="/js/formant-analyzer.js"></script>
+  <script src="/js/charts.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pitchfinder@2.3.0/dist/pitchfinder.min.js"></script>
+  <script src="/lib/formantanalyzer.min.js"></script>
+  <script src="/js/app.js"></script>
+
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(registration => console.log('SW registered'))
+          .catch(error => console.log('SW registration failed:', error));
+      });
+    }
+  </script>
+</body>
+</html>

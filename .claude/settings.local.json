@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:acousticgender.space)",
+      "WebFetch(domain:github.com)",
+      "Bash(node:*)",
+      "Bash(npm install)",
+      "Bash(Copy-Item:*)",
+      "Bash(npm run dev:*)",
+      "Bash(tree:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

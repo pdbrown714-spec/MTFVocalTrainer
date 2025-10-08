@@ -1,0 +1,150 @@
+/**
+ * Pitch detection using autocorrelation algorithm
+ * Note: This will use the pitchfinder library when loaded
+ */
+class PitchDetector {
+  constructor(sampleRate = 44100) {
+    this.sampleRate = sampleRate;
+    this.detector = null;
+    this.pitchHistory = [];
+    this.maxHistorySize = 50;
+  }
+
+  initialize() {
+    // Check if Pitchfinder is loaded
+    if (typeof Pitchfinder !== 'undefined') {
+      // Use YIN algorithm for better accuracy
+      this.detector = Pitchfinder.YIN({ sampleRate: this.sampleRate });
+    } else {
+      console.warn('Pitchfinder library not loaded, using fallback autocorrelation');
+      this.detector = this.autocorrelate.bind(this);
+    }
+  }
+
+  detectPitch(buffer) {
+    if (!this.detector) {
+      this.initialize();
+    }
+
+    let frequency = null;
+
+    if (typeof this.detector === 'function') {
+      frequency = this.detector(buffer);
+    }
+
+    // Filter out unrealistic frequencies (human voice range ~80-1000Hz)
+    if (frequency && frequency > 60 && frequency < 1200) {
+      this.pitchHistory.push(frequency);
+      if (this.pitchHistory.length > this.maxHistorySize) {
+        this.pitchHistory.shift();
+      }
+      return frequency;
+    }
+
+    return null;
+  }
+
+  getAveragePitch(samples = 10) {
+    if (this.pitchHistory.length === 0) return null;
+
+    const recentPitches = this.pitchHistory.slice(-samples);
+    const sum = recentPitches.reduce((a, b) => a + b, 0);
+    return sum / recentPitches.length;
+  }
+
+  getStandardDeviation(samples = 10) {
+    if (this.pitchHistory.length < 2) return 0;
+
+    const recentPitches = this.pitchHistory.slice(-samples);
+    const avg = recentPitches.reduce((a, b) => a + b, 0) / recentPitches.length;
+
+    const squareDiffs = recentPitches.map(pitch => Math.pow(pitch - avg, 2));
+    const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / squareDiffs.length;
+
+    return Math.sqrt(avgSquareDiff);
+  }
+
+  clearHistory() {
+    this.pitchHistory = [];
+  }
+
+  // Fallback autocorrelation algorithm
+  autocorrelate(buffer) {
+    const SIZE = buffer.length;
+    const MAX_SAMPLES = Math.floor(SIZE / 2);
+    let best_offset = -1;
+    let best_correlation = 0;
+    let rms = 0;
+
+    // Calculate RMS (root mean square) to detect if there's enough signal
+    for (let i = 0; i < SIZE; i++) {
+      const val = buffer[i];
+      rms += val * val;
+    }
+    rms = Math.sqrt(rms / SIZE);
+
+    // Not enough signal
+    if (rms < 0.01) return null;
+
+    // Find the best correlation
+    let lastCorrelation = 1;
+    for (let offset = 1; offset < MAX_SAMPLES; offset++) {
+      let correlation = 0;
+
+      for (let i = 0; i < MAX_SAMPLES; i++) {
+        correlation += Math.abs(buffer[i] - buffer[i + offset]);
+      }
+
+      correlation = 1 - correlation / MAX_SAMPLES;
+
+      if (correlation > 0.9 && correlation > lastCorrelation) {
+        const foundGoodCorrelation = correlation > best_correlation;
+        if (foundGoodCorrelation) {
+          best_correlation = correlation;
+          best_offset = offset;
+        }
+      }
+
+      lastCorrelation = correlation;
+    }
+
+    if (best_offset === -1) return null;
+
+    const fundamental_freq = this.sampleRate / best_offset;
+    return fundamental_freq;
+  }
+
+  frequencyToNote(frequency) {
+    const noteStrings = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const noteNum = 12 * (Math.log(frequency / 440) / Math.log(2));
+    const noteIndex = Math.round(noteNum) + 69;
+    const octave = Math.floor(noteIndex / 12) - 1;
+    const noteName = noteStrings[noteIndex % 12];
+    const cents = Math.floor((noteNum - Math.round(noteNum)) * 100);
+
+    return {
+      note: noteName + octave,
+      cents: cents,
+      frequency: frequency
+    };
+  }
+
+  noteToFrequency(note, octave) {
+    const notes = {
+      'C': -9, 'C#': -8, 'D': -7, 'D#': -6,
+      'E': -5, 'F': -4, 'F#': -3, 'G': -2,
+      'G#': -1, 'A': 0, 'A#': 1, 'B': 2
+    };
+
+    const semitones = notes[note] + (octave - 4) * 12;
+    return 440 * Math.pow(2, semitones / 12);
+  }
+
+  isOnTarget(currentFreq, targetFreq, threshold = 5) {
+    if (!currentFreq) return false;
+    return Math.abs(currentFreq - targetFreq) <= threshold;
+  }
+}
+
+// Export for use in other modules
+window.PitchDetector = PitchDetector;
