@@ -79,7 +79,7 @@ class PitchDetector {
     this.pitchHistory = [];
   }
 
-  // Fallback autocorrelation algorithm
+  // Improved autocorrelation algorithm
   autocorrelate(buffer) {
     const SIZE = buffer.length;
     const MAX_SAMPLES = Math.floor(SIZE / 2);
@@ -94,34 +94,52 @@ class PitchDetector {
     }
     rms = Math.sqrt(rms / SIZE);
 
-    // Not enough signal
-    if (rms < 0.01) return null;
+    // Not enough signal (lowered threshold for better sensitivity)
+    if (rms < 0.005) return null;
 
-    // Find the best correlation
-    let lastCorrelation = 1;
-    for (let offset = 1; offset < MAX_SAMPLES; offset++) {
-      let correlation = 0;
-
+    // Autocorrelation
+    const correlations = new Array(MAX_SAMPLES);
+    for (let lag = 0; lag < MAX_SAMPLES; lag++) {
+      let sum = 0;
       for (let i = 0; i < MAX_SAMPLES; i++) {
-        correlation += Math.abs(buffer[i] - buffer[i + offset]);
+        sum += buffer[i] * buffer[i + lag];
       }
-
-      correlation = 1 - correlation / MAX_SAMPLES;
-
-      if (correlation > 0.9 && correlation > lastCorrelation) {
-        const foundGoodCorrelation = correlation > best_correlation;
-        if (foundGoodCorrelation) {
-          best_correlation = correlation;
-          best_offset = offset;
-        }
-      }
-
-      lastCorrelation = correlation;
+      correlations[lag] = sum;
     }
 
-    if (best_offset === -1) return null;
+    // Normalize correlations
+    const normalizedCorr = correlations.map(c => c / correlations[0]);
 
-    const fundamental_freq = this.sampleRate / best_offset;
+    // Find the first peak after lag of at least 20 (to avoid octave errors)
+    // For human voice (80-1000Hz), this corresponds to reasonable pitch range
+    const minLag = Math.floor(this.sampleRate / 1000); // 1000Hz max
+    const maxLag = Math.floor(this.sampleRate / 80);   // 80Hz min
+
+    for (let lag = minLag; lag < maxLag && lag < MAX_SAMPLES; lag++) {
+      // Look for positive peak
+      if (normalizedCorr[lag] > 0.5 && normalizedCorr[lag] > best_correlation) {
+        // Check if it's actually a peak
+        const isPeak = normalizedCorr[lag] > normalizedCorr[lag - 1] &&
+                      normalizedCorr[lag] > normalizedCorr[lag + 1];
+        if (isPeak) {
+          best_correlation = normalizedCorr[lag];
+          best_offset = lag;
+        }
+      }
+    }
+
+    if (best_offset === -1 || best_correlation < 0.5) return null;
+
+    // Parabolic interpolation for more accurate frequency
+    let delta = 0;
+    if (best_offset > 0 && best_offset < MAX_SAMPLES - 1) {
+      const alpha = normalizedCorr[best_offset - 1];
+      const beta = normalizedCorr[best_offset];
+      const gamma = normalizedCorr[best_offset + 1];
+      delta = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma);
+    }
+
+    const fundamental_freq = this.sampleRate / (best_offset + delta);
     return fundamental_freq;
   }
 
