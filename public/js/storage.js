@@ -26,13 +26,17 @@ class Storage {
             attempts: 0,
             bestAccuracy: null,
             avgStdDev: null,
-            completed: false
+            completed: false,
+            consecutiveSuccesses: 0,
+            requiredSuccesses: 3
           },
           section2Stats: {
             attempts: 0,
             bestResonanceStability: null,
             avgResonanceStdDev: null,
-            completed: false
+            completed: false,
+            consecutiveSuccesses: 0,
+            requiredSuccesses: 3
           },
           section3Stats: {
             vowelsCompleted: [],

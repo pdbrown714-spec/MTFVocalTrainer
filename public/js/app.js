@@ -85,6 +85,7 @@ class VoiceTrainerApp {
 
   renderHome() {
     const gamification = this.storage.getGamification();
+    const progress = this.storage.getProgress();
 
     // Draw XP progress
     const xpCanvas = document.getElementById('xpProgressCanvas');
@@ -97,6 +98,27 @@ class VoiceTrainerApp {
     const streakCanvas = document.getElementById('streakCalendarCanvas');
     if (streakCanvas) {
       this.charts.drawStreakCalendar(streakCanvas, gamification.dailyPracticeMinutes, gamification.streak);
+    }
+
+    // Update section progress text
+    const section1Prog = document.getElementById('section1Progress');
+    if (section1Prog) {
+      const consecutive = progress.section1Stats.consecutiveSuccesses;
+      if (consecutive > 0) {
+        section1Prog.textContent = `Progress: ${consecutive}/3 consecutive successes`;
+      } else {
+        section1Prog.textContent = 'Get 3 consecutive passes to unlock Section II';
+      }
+    }
+
+    const section2Prog = document.getElementById('section2Progress');
+    if (section2Prog && progress.section2Unlocked) {
+      const consecutive = progress.section2Stats.consecutiveSuccesses;
+      if (consecutive > 0) {
+        section2Prog.textContent = `Progress: ${consecutive}/3 consecutive successes`;
+      } else {
+        section2Prog.textContent = 'Get 3 consecutive passes to unlock Section III';
+      }
     }
   }
 
@@ -294,11 +316,32 @@ class VoiceTrainerApp {
       if (ach) achievements.push(ach);
     }
 
-    // Check if Section 2 should be unlocked
-    if (!this.storage.getProgress().section2Unlocked && avgStdDev < 10) {
-      this.storage.unlockSection(2);
-      alert('🎉 Congratulations! You\'ve unlocked Section II: Resonance Training!');
-      this.loadProgress();
+    // Track consecutive successes for unlocking
+    const progress = this.storage.getProgress();
+    const passedThreshold = avgStdDev < 10;
+
+    if (passedThreshold) {
+      // Success! Increment consecutive counter
+      const newConsecutive = progress.section1Stats.consecutiveSuccesses + 1;
+      this.storage.updateProgress(1, { consecutiveSuccesses: newConsecutive });
+
+      console.log(`✅ Passed! Consecutive successes: ${newConsecutive}/3`);
+
+      // Check if we've hit the required number
+      if (newConsecutive >= 3 && !progress.section2Unlocked) {
+        this.storage.unlockSection(2);
+        alert('🎉 Congratulations! You\'ve passed 3 times in a row!\n\nSection II: Resonance Training is now unlocked!');
+        this.loadProgress();
+      } else if (newConsecutive < 3) {
+        alert(`Great job! 🎯\n\nConsecutive successes: ${newConsecutive}/3\n\nKeep it up - ${3 - newConsecutive} more to unlock Section II!`);
+      }
+    } else {
+      // Failed - reset counter
+      if (progress.section1Stats.consecutiveSuccesses > 0) {
+        console.log(`❌ Didn't pass (${avgStdDev.toFixed(1)}Hz std dev). Resetting consecutive counter.`);
+        this.storage.updateProgress(1, { consecutiveSuccesses: 0 });
+        alert(`Keep practicing! 💪\n\nYour pitch stability was ${avgStdDev.toFixed(1)}Hz (need <10Hz).\n\nConsecutive successes reset to 0/3.`);
+      }
     }
 
     // Show achievements
@@ -434,11 +477,32 @@ class VoiceTrainerApp {
       this.storage.updateProgress(2, { completed: true });
     }
 
-    // Check if Section 3 should be unlocked
-    if (!this.storage.getProgress().section3Unlocked && avgStability < 10) {
-      this.storage.unlockSection(3);
-      alert('🎉 Congratulations! You\'ve unlocked Section III: Word Practice!');
-      this.loadProgress();
+    // Track consecutive successes for unlocking Section 3
+    const progress = this.storage.getProgress();
+    const passedThreshold = avgStability < 10;
+
+    if (passedThreshold) {
+      // Success! Increment consecutive counter
+      const newConsecutive = progress.section2Stats.consecutiveSuccesses + 1;
+      this.storage.updateProgress(2, { consecutiveSuccesses: newConsecutive });
+
+      console.log(`✅ Passed! Consecutive successes: ${newConsecutive}/3`);
+
+      // Check if we've hit the required number
+      if (newConsecutive >= 3 && !progress.section3Unlocked) {
+        this.storage.unlockSection(3);
+        alert('🎉 Congratulations! You\'ve passed 3 times in a row!\n\nSection III: Word Practice is now unlocked!');
+        this.loadProgress();
+      } else if (newConsecutive < 3) {
+        alert(`Excellent! 🔮\n\nConsecutive successes: ${newConsecutive}/3\n\nKeep going - ${3 - newConsecutive} more to unlock Section III!`);
+      }
+    } else {
+      // Failed - reset counter
+      if (progress.section2Stats.consecutiveSuccesses > 0) {
+        console.log(`❌ Didn't pass (${avgStability.toFixed(1)}% stability). Resetting consecutive counter.`);
+        this.storage.updateProgress(2, { consecutiveSuccesses: 0 });
+        alert(`Keep practicing! 💪\n\nYour resonance stability was ${avgStability.toFixed(1)}% (need <10%).\n\nConsecutive successes reset to 0/3.`);
+      }
     }
 
     // Show achievements
