@@ -13,8 +13,14 @@ class PitchDetector {
   initialize() {
     // Check if Pitchfinder is loaded
     if (typeof Pitchfinder !== 'undefined') {
-      // Use YIN algorithm for better accuracy
-      this.detector = Pitchfinder.YIN({ sampleRate: this.sampleRate });
+      try {
+        // Use YIN algorithm for better accuracy
+        this.detector = Pitchfinder.YIN({ sampleRate: this.sampleRate });
+        console.log('✅ Pitchfinder YIN algorithm loaded');
+      } catch (e) {
+        console.warn('Pitchfinder failed to initialize, using fallback:', e);
+        this.detector = this.autocorrelate.bind(this);
+      }
     } else {
       console.warn('Pitchfinder library not loaded, using fallback autocorrelation');
       this.detector = this.autocorrelate.bind(this);
@@ -28,8 +34,13 @@ class PitchDetector {
 
     let frequency = null;
 
-    if (typeof this.detector === 'function') {
-      frequency = this.detector(buffer);
+    try {
+      if (typeof this.detector === 'function') {
+        frequency = this.detector(buffer);
+      }
+    } catch (e) {
+      console.error('Pitch detection error:', e);
+      return null;
     }
 
     // Filter out unrealistic frequencies (human voice range ~80-1000Hz)

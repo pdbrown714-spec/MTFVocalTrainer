@@ -155,8 +155,18 @@ class VoiceTrainerApp {
     let sessionStarted = false;
 
     // Start recording and analyzing
+    let callbackCount = 0;
     this.audioManager.startRecording((audioData) => {
+      callbackCount++;
+      if (callbackCount % 10 === 0) {
+        console.log('📊 Audio callback called:', callbackCount, 'times');
+      }
+
       const pitch = this.pitchDetector.detectPitch(audioData.timeDomainData);
+
+      if (callbackCount <= 5) {
+        console.log('🎵 Detected pitch:', pitch);
+      }
 
       if (pitch) {
         const avgPitch = this.pitchDetector.getAveragePitch(5);
@@ -179,6 +189,7 @@ class VoiceTrainerApp {
         if (!targetHitTime && this.pitchDetector.isOnTarget(avgPitch, targetFreq, 5)) {
           targetHitTime = Date.now() - this.exerciseStartTime;
           sessionStarted = true;
+          console.log('✅ Target hit! Starting session recording.');
         }
 
         // Record data
