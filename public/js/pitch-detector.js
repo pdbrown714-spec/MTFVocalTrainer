@@ -11,20 +11,9 @@ class PitchDetector {
   }
 
   initialize() {
-    // Check if Pitchfinder is loaded
-    if (typeof Pitchfinder !== 'undefined') {
-      try {
-        // Use YIN algorithm for better accuracy
-        this.detector = Pitchfinder.YIN({ sampleRate: this.sampleRate });
-        console.log('✅ Pitchfinder YIN algorithm loaded');
-      } catch (e) {
-        console.warn('Pitchfinder failed to initialize, using fallback:', e);
-        this.detector = this.autocorrelate.bind(this);
-      }
-    } else {
-      console.warn('Pitchfinder library not loaded, using fallback autocorrelation');
-      this.detector = this.autocorrelate.bind(this);
-    }
+    // Use our optimized YIN algorithm
+    console.log('🎵 Using optimized YIN pitch detection algorithm');
+    this.detector = this.yinPitchDetection.bind(this);
   }
 
   detectPitch(buffer) {
@@ -77,6 +66,83 @@ class PitchDetector {
 
   clearHistory() {
     this.pitchHistory = [];
+  }
+
+  // YIN pitch detection algorithm - industry standard
+  yinPitchDetection(buffer) {
+    const threshold = 0.15; // Typical YIN threshold
+    const bufferSize = buffer.length;
+
+    // Calculate RMS to check signal strength
+    let rms = 0;
+    for (let i = 0; i < bufferSize; i++) {
+      rms += buffer[i] * buffer[i];
+    }
+    rms = Math.sqrt(rms / bufferSize);
+
+    // Not enough signal
+    if (rms < 0.01) return null;
+
+    // Step 1: Calculate difference function
+    const yinBuffer = new Float32Array(bufferSize / 2);
+    yinBuffer[0] = 1;
+
+    for (let tau = 1; tau < yinBuffer.length; tau++) {
+      let sum = 0;
+      for (let i = 0; i < yinBuffer.length; i++) {
+        const delta = buffer[i] - buffer[i + tau];
+        sum += delta * delta;
+      }
+      yinBuffer[tau] = sum;
+    }
+
+    // Step 2: Cumulative mean normalized difference
+    let runningSum = 0;
+    yinBuffer[0] = 1;
+
+    for (let tau = 1; tau < yinBuffer.length; tau++) {
+      runningSum += yinBuffer[tau];
+      yinBuffer[tau] *= tau / runningSum;
+    }
+
+    // Step 3: Absolute threshold
+    const minTau = Math.floor(this.sampleRate / 1000); // 1000Hz max
+    const maxTau = Math.floor(this.sampleRate / 80);   // 80Hz min
+
+    let tau = minTau;
+    while (tau < maxTau && tau < yinBuffer.length) {
+      if (yinBuffer[tau] < threshold) {
+        while (tau + 1 < yinBuffer.length && yinBuffer[tau + 1] < yinBuffer[tau]) {
+          tau++;
+        }
+        break;
+      }
+      tau++;
+    }
+
+    // No suitable tau found
+    if (tau === maxTau || tau >= yinBuffer.length) {
+      return null;
+    }
+
+    // Step 4: Parabolic interpolation
+    let betterTau = tau;
+    if (tau > 0 && tau < yinBuffer.length - 1) {
+      const x0 = tau - 1;
+      const x2 = tau + 1;
+      if (yinBuffer[x0] !== yinBuffer[x2]) {
+        betterTau = tau + (yinBuffer[x2] - yinBuffer[x0]) / (2 * (2 * yinBuffer[tau] - yinBuffer[x0] - yinBuffer[x2]));
+      }
+    }
+
+    const frequency = this.sampleRate / betterTau;
+
+    // Validate frequency is in reasonable range
+    if (frequency < 60 || frequency > 1200) {
+      return null;
+    }
+
+    return frequency;
   }
 
   // Improved autocorrelation algorithm

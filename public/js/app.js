@@ -151,21 +151,36 @@ class VoiceTrainerApp {
       document.getElementById('readyLight').classList.add('active');
     }, 2000);
 
+    // Turn off light after 35 seconds (enough time for practice)
+    setTimeout(() => {
+      document.getElementById('readyLight').classList.remove('active');
+    }, 37000);
+
+    // Auto-stop after 40 seconds
+    let autoStopTimer = setTimeout(() => {
+      console.log('⏱️ Auto-stopping after 40 seconds');
+      this.stopPitchExercise();
+    }, 40000);
+
     let targetHitTime = null;
     let sessionStarted = false;
 
+    // Store timer so we can cancel it if manually stopped
+    this.autoStopTimer = autoStopTimer;
+
     // Start recording and analyzing
     let callbackCount = 0;
+    let lastLogTime = Date.now();
     this.audioManager.startRecording((audioData) => {
       callbackCount++;
-      if (callbackCount % 10 === 0) {
-        console.log('📊 Audio callback called:', callbackCount, 'times');
-      }
 
       const pitch = this.pitchDetector.detectPitch(audioData.timeDomainData);
 
-      if (callbackCount <= 5) {
-        console.log('🎵 Detected pitch:', pitch);
+      // Log pitch every 2 seconds for debugging
+      const now = Date.now();
+      if (now - lastLogTime > 2000) {
+        console.log('🎵 Current pitch:', pitch ? `${pitch.toFixed(1)} Hz` : 'none', '| Callbacks:', callbackCount);
+        lastLogTime = now;
       }
 
       if (pitch) {
@@ -206,6 +221,12 @@ class VoiceTrainerApp {
 
   stopPitchExercise() {
     this.audioManager.stopRecording();
+
+    // Clear auto-stop timer if it exists
+    if (this.autoStopTimer) {
+      clearTimeout(this.autoStopTimer);
+      this.autoStopTimer = null;
+    }
 
     document.getElementById('startPitchBtn').style.display = 'inline-block';
     document.getElementById('stopPitchBtn').style.display = 'none';
