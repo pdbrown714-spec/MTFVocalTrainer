@@ -186,6 +186,9 @@ class VoiceTrainerApp {
 
     let targetHitTime = null;
     let sessionStarted = false;
+    let sustainStartTime = null;
+    let sustainDuration = 0;
+    const requiredSustainSeconds = 3; // Must hold for 3 seconds
 
     // Store timer so we can cancel it if manually stopped
     this.autoStopTimer = autoStopTimer;
@@ -222,14 +225,39 @@ class VoiceTrainerApp {
           this.charts.drawPitchMeter(canvas, avgPitch, targetFreq);
         }
 
-        // Track when target was first hit
-        if (!targetHitTime && this.pitchDetector.isOnTarget(avgPitch, targetFreq, 5)) {
-          targetHitTime = Date.now() - this.exerciseStartTime;
-          sessionStarted = true;
-          console.log('✅ Target hit! Starting session recording.');
+        // Check if currently on target
+        const onTarget = this.pitchDetector.isOnTarget(avgPitch, targetFreq, 5);
+
+        // Track sustain time
+        if (onTarget) {
+          if (!sustainStartTime) {
+            sustainStartTime = Date.now();
+            console.log('🎯 On target! Starting sustain timer...');
+          } else {
+            sustainDuration = (Date.now() - sustainStartTime) / 1000;
+
+            // Update sustain display
+            const sustainText = `Sustaining: ${sustainDuration.toFixed(1)}s / ${requiredSustainSeconds}s`;
+            document.getElementById('pitchAccuracy').textContent = sustainText;
+
+            // Check if we've sustained long enough to start recording
+            if (sustainDuration >= requiredSustainSeconds && !sessionStarted) {
+              targetHitTime = Date.now() - this.exerciseStartTime;
+              sessionStarted = true;
+              console.log('✅ Sustained for 3 seconds! Starting session recording.');
+              document.getElementById('pitchAccuracy').textContent = '✓ Recording!';
+            }
+          }
+        } else {
+          // Lost target - reset sustain timer if we haven't started recording yet
+          if (!sessionStarted && sustainStartTime) {
+            console.log('❌ Lost target. Resetting sustain timer.');
+            sustainStartTime = null;
+            sustainDuration = 0;
+          }
         }
 
-        // Record data
+        // Record data only after sustaining for required time
         if (sessionStarted) {
           this.exerciseData.push({
             timestamp: Date.now() - this.exerciseStartTime,
